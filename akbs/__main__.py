@@ -10,23 +10,27 @@ import argparse
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='A build system for C/C++/ASM')
-    parser.add_argument('--file', metavar='FILE', type=str, nargs=1,
+    parser.add_argument('--file', '-f', metavar='FILE', type=str, nargs=1,
                         help='the file to build from', default=["build.akbs"])
-
+    parser.add_argument('--no-environ', '-e', action='store_true',
+                        help='do not use environment variables')
+    parser.add_argument('--no-cache', '-c', action='store_true',
+                        help='do not use cache')
     if os.name == 'nt':
         print("Not supported in Windows (yet)")
         sys.exit()
 
     args = parser.parse_args()
-    if os.path.exists('.hashes'):
+    if os.path.exists('.hashes') and not args.no_cache:
         with open('.hashes', 'r') as f:
             hash_table = json.load(f)
     else:
         hash_table = {}
 
     def error(d):
-        with open('.hashes', 'w') as f:
-            json.dump(hash_table, f)
+        if not args.no_cache:
+            with open('.hashes', 'w') as f:
+                json.dump(hash_table, f)
         print(d)
         print("On line "+str(i))
         print(lines[i])
@@ -44,6 +48,10 @@ if __name__ == '__main__':
     variables = {
         "PLATFORM": os.name.upper()
     }
+
+    if not args.no_environ:
+        variables.update(os.environ)
+    
 
     defines = {}
     code = {
@@ -192,25 +200,29 @@ if __name__ == '__main__':
         elif lines[i].startswith("compile"):
             what, files = [i.strip() for i in re.search(
                 r"compile[ ]*\((.+?)\)", lines[i]).groups()[0].split(",")]
-            objs = [".".join(x.split(".")[:-1] + ['o']) for x in files.split(' ')
+            objs = [variables.get("BUILD_DIR",".") + "/" + (".".join(x.split(".")[:-1] + ['o'])) for x in files.split(' ')
                     if x.split('.')[-1] in ['c', 'cpp', 'asm', 'S']]
             for x in files.split(' '):
-                if x in hash_table:
-                    if hash_table[x] == os.path.getmtime(x) and os.path.exists(".".join(x.split('.')[:-1])+'.o'):
-                        continue
-                hash_table[x] = os.path.getmtime(x)
-                cmd = variables[{'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_COMPILER'] + ' -o '+".".join(x.split('.')[:-1])+'.o ' + ('-felf64 ' if x.split('.')[-1] in ['asm', 'S'] else '-c ') + x + (
+                if not args.no_cache:
+                    if x in hash_table:
+                        if hash_table[x] == os.path.getmtime(x) and os.path.exists(".".join(x.split('.')[:-1])+'.o'):
+                            continue
+                    hash_table[x] = os.path.getmtime(x)
+                if 'BUILD_DIR' in variables:
+                    os.makedirs(variables['BUILD_DIR']+'/'+os.path.dirname(x),exist_ok=True)
+                
+                cmd = variables[{'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_COMPILER'] + ' -o '+variables.get("BUILD_DIR",".")+"/"+(".".join(x.split('.')[:-1]))+'.o ' + ('-felf64 ' if x.split('.')[-1] in ['asm', 'S'] else '-c ') + x + (
                     (' -std='+{'c': 'c', 'cpp': 'c++'}[x.split('.')[-1]]+variables[str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD']) if str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD' in variables else '')
                 print(cmd)
                 if os.system(cmd) != 0:
                     error('IDK')
-            print(" ".join([variables['LINKER_COMPILER'], '-o',
+            print(" ".join([variables['LINKER_COMPILER'], '-o', variables.get("OUTPUT_DIR",".")+"/"+
                   variables['OUTPUT'], ' '.join(objs), '-' + what.lower()]))
             os.system(" ".join([variables['LINKER_COMPILER'], '-o',
                       variables['OUTPUT'], ' '.join(objs), '-' + what.lower()]))
         elif lines[i] == 'endif':
             pass
         i += 1
-
-    with open('.hashes', 'w') as f:
-        json.dump(hash_table, f)
+    if not args.no_cache:
+        with open('.hashes', 'w') as f:
+            json.dump(hash_table, f)
