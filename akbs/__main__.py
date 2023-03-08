@@ -17,8 +17,8 @@ if __name__ == '__main__':
     parser.add_argument('--no-cache', '-c', action='store_true',
                         help='do not use cache')
     if os.name == 'nt':
-        print("Not supported in Windows (yet)")
-        sys.exit()
+        print("Not supported in Windows (yet)", file=sys.stderr)
+        sys.exit(1)
 
     args = parser.parse_args()
     if os.path.exists('.hashes') and not args.no_cache:
@@ -27,13 +27,15 @@ if __name__ == '__main__':
     else:
         hash_table = {}
 
+    
+
     def error(d):
         if not args.no_cache:
             with open('.hashes', 'w') as f:
                 json.dump(hash_table, f)
-        print(d)
-        print("On line "+str(i))
-        print(lines[i])
+        print(d, file=sys.stderr)
+        print("On line "+str(i), file=sys.stderr)
+        print(lines[i], file=sys.stderr)
         sys.exit(1)
 
     if os.path.exists(args.file[0]):
@@ -43,11 +45,19 @@ if __name__ == '__main__':
         if args.file[0] == '-':
             file = sys.stdin.read()
         else:
-            print("File not found: "+args.file[0])
+            print("File not found: "+args.file[0], file=sys.stderr)
             sys.exit(1)
     variables = {
         "PLATFORM": os.name.upper()
     }
+
+    if os.path.exists('.comp_caches') and not args.no_cache:
+        with open('.comp_caches', 'r') as f:
+            comp_caches = json.load(f)
+            variables.update(comp_caches)
+    else:
+        comp_caches = {}
+    
 
     if not args.no_environ:
         variables.update(os.environ)
@@ -64,9 +74,12 @@ if __name__ == '__main__':
     lines = file.split("\n")
     i = 0
 
-    def look_for(to_check, val):
+    def look_for(to_check, val, use_cached=True):
         with open(os.devnull, 'w') as devnull:
-
+            if use_cached and val+'_COMPILER' in variables:
+                print("Checking for "+variables[val+'_COMPILER']+"... found (cached)")
+                return
+                    
             for i in to_check:
                 print("Checking for "+i+"...", end=" ")
                 try:
@@ -193,7 +206,8 @@ if __name__ == '__main__':
                     'CXX': ['c++', 'g++', 'clang++'],
                     'ASM_INTEL': ['nasm', 'yasm', 'masm'],
                     'ASM_ATT': ['as', 'gas'],
-                    'LINKER': ['gcc', 'clang', 'ld']
+                    'SHARED': ['gcc', 'clang', 'ld'],
+                    'STATIC': ['ar'],
                 }[x], x)
         elif lines[i].startswith("print"):
             print(" ".join(lines[i].split(" ")[1:]))
@@ -205,24 +219,40 @@ if __name__ == '__main__':
             for x in files.split(' '):
                 if not args.no_cache:
                     if x in hash_table:
-                        if hash_table[x] == os.path.getmtime(x) and os.path.exists(".".join(x.split('.')[:-1])+'.o'):
+                        if hash_table[x] == os.path.getmtime(x) and os.path.exists(variables.get("BUILD_DIR",".") + "/" + (".".join(x.split('.')[:-1])+'.o')):
                             continue
                     hash_table[x] = os.path.getmtime(x)
                 if 'BUILD_DIR' in variables:
                     os.makedirs(variables['BUILD_DIR']+'/'+os.path.dirname(x),exist_ok=True)
                 
-                cmd = variables[{'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_COMPILER'] + ' -o '+variables.get("BUILD_DIR",".")+"/"+(".".join(x.split('.')[:-1]))+'.o ' + ('-felf64 ' if x.split('.')[-1] in ['asm', 'S'] else '-c ') + x + (
-                    (' -std='+{'c': 'c', 'cpp': 'c++'}[x.split('.')[-1]]+variables[str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD']) if str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD' in variables else '')
-                print(cmd)
-                if os.system(cmd) != 0:
-                    error('IDK')
-            print(" ".join([variables['LINKER_COMPILER'], '-o', variables.get("OUTPUT_DIR",".")+"/"+
-                  variables['OUTPUT'], ' '.join(objs), '-' + what.lower()]))
-            os.system(" ".join([variables['LINKER_COMPILER'], '-o',
-                      variables['OUTPUT'], ' '.join(objs), '-' + what.lower()]))
+                def exec():
+                    cmd = variables[{'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_COMPILER'] + ' -o '+variables.get("BUILD_DIR",".")+"/"+(".".join(x.split('.')[:-1]))+'.o ' + ('-felf64 ' if x.split('.')[-1] in ['asm', 'S'] else '-c ') + x + (
+                        (' -std='+{'c': 'c', 'cpp': 'c++'}[x.split('.')[-1]]+variables[str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD']) if str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD' in variables else '' + (variables.get({'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_FLAGS', '')))
+                    print(cmd)
+                    return os.system(cmd)
+                val = exec()
+                if val == 0x7F00 and {'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_COMPILER' in comp_caches:
+                    look_for({
+                        'c': ['cc', 'gcc', 'clang'],
+                        'cpp': ['c++', 'g++', 'clang++'],
+                        'asm': ['nasm', 'yasm', 'masm'],
+                        'S': ['as', 'gas']
+                    }[x.split('.')[-1]], {'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]], False)
+                    val = exec()
+                if val != 0:
+                    error("Compilation failed")
+            os.makedirs(os.path.dirname(variables.get('OUTPUT_DIR','.')+'/'+variables['OUTPUT']), exist_ok=True)
+            print(" ".join([variables[what.upper()+'_COMPILER'], ('-shared' if what.upper() == 'SHARED' else 'rcs'), ('-o' if what.upper() == 'SHARED' else ''),
+                      variables.get('OUTPUT_DIR','.')+'/'+variables['OUTPUT'],' '.join(objs)]))
+            os.system(" ".join([variables[what.upper()+'_COMPILER'], ('-shared' if what.upper() == 'SHARED' else 'rcs'), ('-o' if what.upper() == 'SHARED' else ''),
+                      variables.get('OUTPUT_DIR','.')+'/'+variables['OUTPUT'],' '.join(objs)]))
         elif lines[i] == 'endif':
             pass
         i += 1
     if not args.no_cache:
         with open('.hashes', 'w') as f:
             json.dump(hash_table, f)
+        with open('.comp_caches', 'w') as f:
+            json.dump({
+                val+'_COMPILER': variables.get(val+'_COMPILER') for val in ['C', 'CXX', 'ASM_INTEL', 'ASM_ATT', 'STATIC', 'SHARED'] if val+'_COMPILER' in variables and variables[val+'_COMPILER']
+            }, f)

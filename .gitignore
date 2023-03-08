@@ -3,3 +3,4 @@ akbs.egg-info/
 __pycache__/
 .hashes
 dist/
+.comp_caches
