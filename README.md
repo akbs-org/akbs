@@ -26,7 +26,7 @@ set(FILES, wildcard$(src/library/**/*.cpp) wildcard$(src/library/**/*.c))
 set(OUTPUT_DIR, dist)
 set(BUILD_DIR, build)
 
-if(eq($PLATFORM, POSIX))
+if(eq$($PLATFORM, POSIX))
 set(FILES, wildcard$(src/library/linux/*.asm) remove$($FILES, src/library/cross-platform/addp.c, src/library/cross-platform/multiply_whole.c))
 endif
 
@@ -41,6 +41,7 @@ compile(STATIC, $FILES)
 
 ## How do you use AKBS?
 By default, the build script is called `build.akbs`, similar to `Makefile` and `CMakeLists.txt`
+However, you can use the `--file` option to specify a file
 
 To enable languages, you use the `check_for` function
 ```
@@ -69,25 +70,10 @@ The `$PLATFORM` variable comes predefined and is set to `os.name`
 
 For conditions, use if (else and else if are not implemented yet) and endif.
 
-
-A list of conditions is as follows
-| Condition | Description | Introduced
-|---|---|---|
-| eq(arg1, arg2) | Checks if two strings are equal | v1.0.0
-| neq(arg1, arg2) | Checks if two strings are unequal | v1.0.3
-| gt(arg1, arg2) | Checks if arg1 is greater than arg2 | v1.0.3
-| lt(arg1, arg2) | Checks if arg1 is lesser than arg2 | v1.0.3
-| gte(arg1, arg2) | Checks if arg1 is greater than or equal to arg2 | v1.0.3
-| lte(arg1, arg2) | Checks if arg1 is lesser than or equal to arg2 | v1.0.3
-| set(arg1) | Checks if there is a variable with the name arg1 | v1.0.3 
-| notset(arg1) | Checks if there is not a variable with the name arg1 | v1.0.3 
-
-
-
 ```
-if(PLATFORM)
+if(set$(PLATFORM))
 print $PLATFORM
-if(eq(PLATFORM, UNIX))
+if(eq$($PLATFORM, UNIX))
 print Yay, we're in UNIX land
 endif
 endif
@@ -97,7 +83,7 @@ Also, there is a rudimentary pre-processor, with `%define`
 
 ```
 %define ifend endif
-if(PLATFORM)
+if(set$(PLATFORM))
 ifend
 ```
 
@@ -108,6 +94,18 @@ There is also a list of helper functions
 | wildcard$ | str1 | Evaluates a list of space separated globs into a space separated list of files | v1.0.0
 | remove$ | str1, str2, str3... | Removes str2 onwards from a space separated list of strings | v1.0.0
 | replace$ | str1, str2, str3... | Replaces str2,4,6,8... with str3,5,7,9... in str1 | v1.0.3
+| eq$ | arg1, arg2 | Checks if two strings are equal | v1.0.0
+| neq$ | arg1, arg2 | Checks if two strings are unequal | v1.0.3
+| gt$ | arg1, arg2 | Checks if arg1 is greater than arg2 | v1.0.3
+| lt$ | arg1, arg2 | Checks if arg1 is lesser than arg2 | v1.0.3
+| gte$ | arg1, arg2 | Checks if arg1 is greater than or equal to arg2 | v1.0.3
+| lte$ | arg1, arg2 | Checks if arg1 is lesser than or equal to arg2 | v1.0.3
+| set$ | arg1 | | Checks if there is a variable with the name arg1 | v1.0.3 
+| notset$ | arg1 | Checks if there is not a variable with the name arg1 | v1.0.3 
+| and$ | arg1, arg2, arg3... | Ands all the booleans | v1.0.4
+| or$ | arg1, arg2, arg3... | Ors all the booleans | v1.0.4
+| not$ | arg1 | Nots the boolean | v1.0.4
+
 
 A list of important variables are
 | Variable | Is Set | Description | Introduced |
@@ -133,14 +131,12 @@ A list of important variables are
 
 ## How to clean the files
 ```bash
-find -name "*.o" -exec "rm" "{}" ";"
-rm .hashes 
-rm .comp_caches
+python3 -m akbs --clean
 ```
 
 ## To-Do
 * [x] Build directory (milestone 1.0.1)
-* [ ] Nested functions
+* [x] Nested functions
 * [ ] Windows support
 * [ ] Optimization
 * [ ] Subdirectories
@@ -148,8 +144,9 @@ rm .comp_caches
 * [x] More if conditions
 * [x] `replace$()` helper function
 * [x] --clean command
-* [ ] Documenting my code + Readable variables
+* [x] Documenting my code + Readable variables
 * [x] C_FLAGS, CXX_FLAGS, ASM...
 * [x] Cache install locations (milestone 1.0.2)
-* [ ] Ability to set target architecture
-
+* [x] Ability to set target architecture (Use CFLAGS and CXXFLAGS)
+* [ ] Plugin Support
+* [ ] Make `print` and `exit` a function, not a statement

@@ -18,3 +18,10 @@
 - Added `replace$`
 - Added more conditions in if statements and changed variable definition check to `set()` in if statements
 - Added `exit`
+
+## Version 1.0.4
+- Added `CONTRIBUTING.md`
+- Added error code to `exit`
+- Added nested functions
+- Made the if conditions helper functions and added a `$` suffix
+- Fixed files with compile errors being saved to the `.hashes` file
