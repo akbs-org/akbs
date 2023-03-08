@@ -12,4 +12,9 @@
 - Split `LINKER` into `STATIC` and `SHARED`
 - Print error msgs in `sys.stderr`
   
-  
+## Version 1.0.3
+- Did a tiny bit of optimization in the `compile()` function
+- Added `--clean`
+- Added `replace$`
+- Added more conditions in if statements and changed variable definition check to `set()` in if statements
+- Added `exit`

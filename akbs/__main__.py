@@ -16,6 +16,8 @@ if __name__ == '__main__':
                         help='do not use environment variables')
     parser.add_argument('--no-cache', '-c', action='store_true',
                         help='do not use cache')
+    parser.add_argument('--clean', '-C', action='store_true',
+                        help='clean of all build files')
     if os.name == 'nt':
         print("Not supported in Windows (yet)", file=sys.stderr)
         sys.exit(1)
@@ -26,8 +28,6 @@ if __name__ == '__main__':
             hash_table = json.load(f)
     else:
         hash_table = {}
-
-    
 
     def error(d):
         if not args.no_cache:
@@ -47,6 +47,7 @@ if __name__ == '__main__':
         else:
             print("File not found: "+args.file[0], file=sys.stderr)
             sys.exit(1)
+
     variables = {
         "PLATFORM": os.name.upper()
     }
@@ -57,11 +58,9 @@ if __name__ == '__main__':
             variables.update(comp_caches)
     else:
         comp_caches = {}
-    
 
     if not args.no_environ:
         variables.update(os.environ)
-    
 
     defines = {}
     code = {
@@ -77,9 +76,10 @@ if __name__ == '__main__':
     def look_for(to_check, val, use_cached=True):
         with open(os.devnull, 'w') as devnull:
             if use_cached and val+'_COMPILER' in variables:
-                print("Checking for "+variables[val+'_COMPILER']+"... found (cached)")
+                print("Checking for " +
+                      variables[val+'_COMPILER']+"... found (cached)")
                 return
-                    
+
             for i in to_check:
                 print("Checking for "+i+"...", end=" ")
                 try:
@@ -138,8 +138,21 @@ if __name__ == '__main__':
             data = "".join(tmplist)
             chng += len(tmp)-zzz.span()[1]+zzz.span()[0]
         return chng, data
+
+    def replace_handler(vs, chng, data):
+        for zzz in vs:
+            args = [i.strip()
+                    for i in zzz.groups()[0].split(",")]
+            for i in range(1, len(args), 2):
+                args[0] = args[0].replace(args[i], args[i+1])
+            tmplist = list(data)
+            tmplist[zzz.span()[0]+chng:zzz.span()] = args[0]
+            data = "".join(tmplist)
+            chng += len(args[0])-zzz.span()[1]+zzz.span()[0]
+        return chng, data
+
     def clrfuncs(data):
-        for i in ["wildcard$", "remove$"]:
+        for i in ["wildcard$", "remove$", "replace$"]:
             chng = 0
             vs = list(re.finditer(
                 i.replace("$", "\\$")+r"[ ]*\((.+?)\)", data))
@@ -147,9 +160,9 @@ if __name__ == '__main__':
                 chng, data = {
                     "wildcard$": wildcard_handler,
                     "remove$": remove_handler,
-
+                    "replace$": replace_handler
                 }.get(i, lambda _, no2, no3: error("Please report this error to the developer (https://github.com/AaravMalani/AKBS/issues/new)"))(vs, chng, data)
-                
+
         return data
 
     def clrvars(data):
@@ -158,19 +171,6 @@ if __name__ == '__main__':
             data = data.replace(*there.pop())
         return data
 
-    def eq_handler(cond):
-        global i
-        k, v = [i.strip() for i in re.search(r"eq[ ]*\((.+?)\)", cond).groups()
-                [0].replace(" ", "").split(",")]
-        if k != v:
-            c = 0
-            i += 1
-            while clrdefines(lines[i]) not in ["endif"] or c:
-                if clrdefines(lines[i]).startswith('if'):
-                    c += 1
-                elif clrdefines(lines[i]).startswith(('endif',)):
-                    c -= 1
-                i += 1
     while i < len(lines):
         lines[i] = clrfuncs(clrvars(clrdefines(lines[i])))
         if lines[i].startswith("%define"):
@@ -181,23 +181,32 @@ if __name__ == '__main__':
                                                  lines[i]).groups()[0].split(',') if z]
             variables[k] = v
         elif lines[i].startswith("if"):
-
             cond = re.search(r"if[ ]*\((.+)\)", lines[i]
                              ).groups()[0].replace(" ", "")
-            if not cond.startswith(("eq",)) and cond not in variables:
+            args2 = [i.strip() for i in re.search(
+                (cond[:cond.index("(")])+r"[ ]*\((.+?)\)", cond).groups()[0].split(",")]
+            if not {
+                "eq": lambda ags: ags[0] == ags[1],
+                "neq": lambda ags: ags[0] != ags[1],
+                "gt": lambda ags: float(ags[0]) > float(ags[1]),
+                "lt": lambda ags: float(ags[0]) < float(ags[1]),
+                "gte": lambda ags: float(ags[0]) >= float(ags[1]),
+                "lte": lambda ags: float(ags[0]) <= float(ags[1]),
+                "set": lambda ags: ags[0] in variables,
+                "notset": lambda ags: ags[0] not in variables,
+            }.get(cond[:cond.index("(")], lambda x: error("Undefined condition "+cond[:cond.index("(")]))(args2):
                 c = 0
-
+                i += 1
                 while clrdefines(lines[i]) not in ["endif"] or c:
                     if clrdefines(lines[i]).startswith('if'):
                         c += 1
-                    i += 1
-                    if clrdefines(lines[i]).startswith(('endif',)):
+                    elif clrdefines(lines[i]).startswith(('endif',)):
                         c -= 1
-            else:
-                {
-                    "eq": eq_handler
-                }.get(cond[:cond.index("(")], lambda x: error("Undefined condition "+cond[:cond.index("(")]))(cond)
+                    i += 1
         elif lines[i].startswith("check_for"):
+            if args.clean:
+                i += 1
+                continue
             to_check = [i.strip() for i in re.search(
                 r"check_for[ ]*\((.+?)\)", lines[i]).groups()[0].replace(" ", "").split(",")]
             for x in to_check:
@@ -212,43 +221,65 @@ if __name__ == '__main__':
         elif lines[i].startswith("print"):
             print(" ".join(lines[i].split(" ")[1:]))
         elif lines[i].startswith("compile"):
+
             what, files = [i.strip() for i in re.search(
                 r"compile[ ]*\((.+?)\)", lines[i]).groups()[0].split(",")]
-            objs = [variables.get("BUILD_DIR",".") + "/" + (".".join(x.split(".")[:-1] + ['o'])) for x in files.split(' ')
+            objs = [variables.get("BUILD_DIR", ".") + "/" + (".".join(x.split(".")[:-1] + ['o'])) for x in files.split(' ')
                     if x.split('.')[-1] in ['c', 'cpp', 'asm', 'S']]
+            if args.clean:
+                for b in objs:
+                    if os.path.exists(b):
+                        os.remove(b)
+                if os.path.exists(variables.get("OUTPUT_DIR", ".") + "/" + variables.get("OUTPUT")):
+                    os.remove(variables.get("OUTPUT_DIR", ".") +
+                              "/" + variables.get("OUTPUT"))
+                i += 1
+                continue
             for x in files.split(' '):
                 if not args.no_cache:
                     if x in hash_table:
-                        if hash_table[x] == os.path.getmtime(x) and os.path.exists(variables.get("BUILD_DIR",".") + "/" + (".".join(x.split('.')[:-1])+'.o')):
+                        if hash_table[x] == os.path.getmtime(x) and os.path.exists(variables.get("BUILD_DIR", ".") + "/" + (".".join(x.split('.')[:-1])+'.o')):
                             continue
                     hash_table[x] = os.path.getmtime(x)
+
                 if 'BUILD_DIR' in variables:
-                    os.makedirs(variables['BUILD_DIR']+'/'+os.path.dirname(x),exist_ok=True)
-                
+                    os.makedirs(variables['BUILD_DIR'] +
+                                '/'+os.path.dirname(x), exist_ok=True)
+
+                language = {'c': 'C', 'cpp': 'CXX',
+                            'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]
+
                 def exec():
-                    cmd = variables[{'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_COMPILER'] + ' -o '+variables.get("BUILD_DIR",".")+"/"+(".".join(x.split('.')[:-1]))+'.o ' + ('-felf64 ' if x.split('.')[-1] in ['asm', 'S'] else '-c ') + x + (
-                        (' -std='+{'c': 'c', 'cpp': 'c++'}[x.split('.')[-1]]+variables[str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD']) if str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD' in variables else '' + (variables.get({'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_FLAGS', '')))
+                    cmd = variables[language+'_COMPILER'] + ' -o '+variables.get("BUILD_DIR", ".")+"/"+(".".join(x.split('.')[:-1]))+'.o ' + ('-felf64 ' if x.split('.')[-1] in ['asm', 'S'] else '-c ') + x + (
+                        (' -std='+{'c': 'c', 'cpp': 'c++'}[x.split('.')[-1]]+variables[str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD']) if str({'c': 'C', 'cpp': 'CXX'}.get(x.split('.')[-1], None))+'_STD' in variables else '' + (variables.get(language+'_FLAGS', '')))
                     print(cmd)
                     return os.system(cmd)
                 val = exec()
-                if val == 0x7F00 and {'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]]+'_COMPILER' in comp_caches:
+                if val == 0x7F00 and language+'_COMPILER' in comp_caches:
                     look_for({
                         'c': ['cc', 'gcc', 'clang'],
                         'cpp': ['c++', 'g++', 'clang++'],
                         'asm': ['nasm', 'yasm', 'masm'],
                         'S': ['as', 'gas']
-                    }[x.split('.')[-1]], {'c': 'C', 'cpp': 'CXX', 'asm': 'ASM_INTEL', 'S': 'ASM_ATT'}[x.split('.')[-1]], False)
+                    }[x.split('.')[-1]], language, False)
                     val = exec()
                 if val != 0:
                     error("Compilation failed")
-            os.makedirs(os.path.dirname(variables.get('OUTPUT_DIR','.')+'/'+variables['OUTPUT']), exist_ok=True)
+            os.makedirs(os.path.dirname(variables.get(
+                'OUTPUT_DIR', '.')+'/'+variables['OUTPUT']), exist_ok=True)
             print(" ".join([variables[what.upper()+'_COMPILER'], ('-shared' if what.upper() == 'SHARED' else 'rcs'), ('-o' if what.upper() == 'SHARED' else ''),
-                      variables.get('OUTPUT_DIR','.')+'/'+variables['OUTPUT'],' '.join(objs)]))
+                            variables.get('OUTPUT_DIR', '.')+'/'+variables['OUTPUT'], ' '.join(objs)]))
             os.system(" ".join([variables[what.upper()+'_COMPILER'], ('-shared' if what.upper() == 'SHARED' else 'rcs'), ('-o' if what.upper() == 'SHARED' else ''),
-                      variables.get('OUTPUT_DIR','.')+'/'+variables['OUTPUT'],' '.join(objs)]))
+                      variables.get('OUTPUT_DIR', '.')+'/'+variables['OUTPUT'], ' '.join(objs)]))
         elif lines[i] == 'endif':
             pass
+        elif lines[i] == 'exit':
+            sys.exit(0)
         i += 1
+    if args.clean:
+        os.remove('.hashes')
+        os.remove('.comp_caches')
+        sys.exit(0)
     if not args.no_cache:
         with open('.hashes', 'w') as f:
             json.dump(hash_table, f)

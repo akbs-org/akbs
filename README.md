@@ -44,9 +44,9 @@ By default, the build script is called `build.akbs`, similar to `Makefile` and `
 
 To enable languages, you use the `check_for` function
 ```
-check_for(C, CXX, ASM_INTEL, ASM_ATT, LINKER)
+check_for(C, CXX, ASM_INTEL, ASM_ATT, STATIC, SHARED)
 ```
-Right now, only these 4 languages (and a linker) (3 if you count AT&T and Intel syntax Assembly as one language) are supported
+Right now, only these 4 languages (and a static and shared library linker) (3 if you count AT&T and Intel syntax Assembly as one language) are supported
 
 If you want to set the standard of C and C++, set the C_STD or CXX_STD variable
 ```
@@ -69,9 +69,20 @@ The `$PLATFORM` variable comes predefined and is set to `os.name`
 
 For conditions, use if (else and else if are not implemented yet) and endif.
 
-Inside the if, if the condition is just a variable name, it enters if the variable is defined, else it continues on.
 
-If there is an `eq()` function (more to be implemented soon), it compares if two strings are equal (variables work too obviously)
+A list of conditions is as follows
+| Condition | Description | Introduced
+|---|---|---|
+| eq(arg1, arg2) | Checks if two strings are equal | v1.0.0
+| neq(arg1, arg2) | Checks if two strings are unequal | v1.0.3
+| gt(arg1, arg2) | Checks if arg1 is greater than arg2 | v1.0.3
+| lt(arg1, arg2) | Checks if arg1 is lesser than arg2 | v1.0.3
+| gte(arg1, arg2) | Checks if arg1 is greater than or equal to arg2 | v1.0.3
+| lte(arg1, arg2) | Checks if arg1 is lesser than or equal to arg2 | v1.0.3
+| set(arg1) | Checks if there is a variable with the name arg1 | v1.0.3 
+| notset(arg1) | Checks if there is not a variable with the name arg1 | v1.0.3 
+
+
 
 ```
 if(PLATFORM)
@@ -96,6 +107,7 @@ There is also a list of helper functions
 |---|---|---|---|
 | wildcard$ | str1 | Evaluates a list of space separated globs into a space separated list of files | v1.0.0
 | remove$ | str1, str2, str3... | Removes str2 onwards from a space separated list of strings | v1.0.0
+| replace$ | str1, str2, str3... | Replaces str2,4,6,8... with str3,5,7,9... in str1 | v1.0.3
 
 A list of important variables are
 | Variable | Is Set | Description | Introduced |
@@ -133,9 +145,9 @@ rm .comp_caches
 * [ ] Optimization
 * [ ] Subdirectories
 * [x] Ability to set compilers from `set()` and environment variables
-* [ ] More if conditions
-* [ ] `replace$()` helper function
-* [ ] clean command
+* [x] More if conditions
+* [x] `replace$()` helper function
+* [x] --clean command
 * [ ] Documenting my code + Readable variables
 * [x] C_FLAGS, CXX_FLAGS, ASM...
 * [x] Cache install locations (milestone 1.0.2)
