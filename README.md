@@ -16,7 +16,24 @@ python3 -m akbs
 ```
 ## Speed
 To test the build system, I made a build script for [basic_math_operations](https://github.com/avighnac/basic_math_operations),
-It took 1.205 seconds to compile and link, as well as check for the required compiler and 3 seconds on average (it hit 3.5 and 2.5 a couple of times).
+
+**Operating System**: Debian Bullseye
+**Host**: Linux 5.10.102.1-microsoft-standard-WSL2
+**Architecture**: x86_64
+
+**AKBS**: 
+Version: 1.0.5
+Time: 1.351s
+
+**CMake w/ Makefile**:
+CMake Version: 3.26.0
+Make Version: 4.3
+Time: 3.360s
+
+**CMake w/ Ninja**:
+CMake Version: 3.26.0
+Ninja Version: 1.11.1
+Time: 2.750s
 
 The `build.akbs` file is as follows
 ```
@@ -60,9 +77,10 @@ To compile a list of files, use the compile function
 compile(SHARED/STATIC, src/a.c src/b.c src/c.c)
 ```
 
-To print a statement you can use the print statement
+To print a statement you can use the print function and to exit a program, use exit
 ```
-print $PLATFORM
+print($PLATFORM)
+exit(1)
 ```
 To use a variable, use `$VARIABLENAME`
 
@@ -72,7 +90,7 @@ For conditions, use if (else and else if are not implemented yet) and endif.
 
 ```
 if(set$(PLATFORM))
-print $PLATFORM
+print($PLATFORM)
 if(eq$($PLATFORM, UNIX))
 print Yay, we're in UNIX land
 endif
@@ -86,6 +104,16 @@ Also, there is a rudimentary pre-processor, with `%define`
 if(set$(PLATFORM))
 ifend
 ```
+
+Comments work by adding a semi-colon at the start of the line
+```
+; these   
+; lines   
+; will    
+; be      
+; skipped 
+```
+**Comments only work from the start of the line**
 
 There is also a list of helper functions
 
@@ -139,7 +167,7 @@ python3 -m akbs --clean
 * [x] Nested functions
 * [ ] Windows support
 * [ ] Optimization
-* [ ] Subdirectories
+* [x] Subdirectories
 * [x] Ability to set compilers from `set()` and environment variables
 * [x] More if conditions
 * [x] `replace$()` helper function
@@ -149,4 +177,5 @@ python3 -m akbs --clean
 * [x] Cache install locations (milestone 1.0.2)
 * [x] Ability to set target architecture (Use CFLAGS and CXXFLAGS)
 * [ ] Plugin Support
-* [ ] Make `print` and `exit` a function, not a statement
+* [x] Make `print` and `exit` a function, not a statement
+* [ ] Make comments work in the middle of a line

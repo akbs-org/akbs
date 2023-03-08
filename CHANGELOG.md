@@ -25,3 +25,9 @@
 - Added nested functions
 - Made the if conditions helper functions and added a `$` suffix
 - Fixed files with compile errors being saved to the `.hashes` file
+
+## Version 1.0.5
+- Touched up the `Speed` section of the README.md
+- Made `print` and `exit` functions instead of statements
+- Added `exec` for subdirectories
+- Skipped execution for empty lines and comments (lines starting with `;`)

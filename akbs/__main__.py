@@ -7,7 +7,7 @@ import subprocess
 import json
 import argparse
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 __author__ = "Aarav Malani"
 __license__ = "MIT"
 
@@ -39,17 +39,17 @@ language_to_compiler = {
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog="akbs",
-        description='A build system for C/C++/ASM')
-    parser.add_argument('--file', '-f', help='the file to build from', default=["build.akbs"])
+                                     description='A build system for C/C++/ASM')
+    parser.add_argument(
+        '--file', '-f', help='the file to build from', default=["build.akbs"])
     parser.add_argument('--no-environ', '-e', action='store_true',
                         help='do not use environment variables')
     parser.add_argument('--no-cache', '-c', action='store_true',
                         help='do not use cache')
     parser.add_argument('--clean', '-C', action='store_true',
                         help='clean all build and cache files')
-    parser.add_argument('--version', '-v', action='store_true', help='print version and exit')
-    
-    
+    parser.add_argument('--version', '-v', action='store_true',
+                        help='print version and exit')
 
     # Windows is unsupported right now
     if os.name == 'nt':
@@ -211,6 +211,10 @@ if __name__ == '__main__':
     while i < len(lines):
         # Preprocess the file and evaluate variables and helper functions
         lines[i] = clrfuncs(clrvars(clrdefines(lines[i]))).strip()
+        # Skip empty lines and comments
+        if not lines[i] or lines[i].startswith(";"):
+            i += 1
+            continue
         # Preprocesser define
         if lines[i].startswith("%define"):
             # Split by a space a maximum of 2 times
@@ -258,22 +262,23 @@ if __name__ == '__main__':
             for x in to_check:
                 # Call look_for with the compiler / assembler / linker
                 look_for(language_to_compiler[x], x)
-        
+
         # Print a message
         elif lines[i].startswith("print"):
-            # TODO: make this a function not a statement
-            print(" ".join(lines[i].split(" ")[1:]))
-        
+            to_print = re.search(r"print[ ]*\((.*?)\)",
+                                 lines[i]).groups()[0].strip()
+            print(to_print)
+
         # Compile a list of files and link them in one go
         elif lines[i].startswith("compile"):
             # Get the list of files and the library file type
-            what, files = [i.strip() for i in re.search( 
+            what, files = [i.strip() for i in re.search(
                 r"compile[ ]*\((.+?)\)", lines[i]).groups()[0].split(",")]
-            
+
             # Convert the list of files into a list of object files
             objs = [variables.get("BUILD_DIR", ".") + "/" + (".".join(x.split(".")[:-1] + ['o'])) for x in files.split(' ')
                     if x.split('.')[-1] in ['c', 'cpp', 'asm', 'S']]
-            
+
             # If we are cleaning, remove the object files and the library
             if args.clean:
                 for obj in objs:
@@ -293,7 +298,6 @@ if __name__ == '__main__':
                         # Get the modification time and see if it is the same as the one we have saved
                         if hash_table[file] == os.path.getmtime(file) and os.path.exists(variables.get("BUILD_DIR", ".") + "/" + (".".join(file.split('.')[:-1])+'.o')):
                             continue
-                    
 
                 # Make the directory if it doesn't exist
                 if 'BUILD_DIR' in variables:
@@ -324,32 +328,35 @@ if __name__ == '__main__':
                 if not args.no_cache:
                     # Update the modification time
                     hash_table[file] = os.path.getmtime(file)
-            
-            #Create the output directory if it doesn't exist
+
+            # Create the output directory if it doesn't exist
             os.makedirs(os.path.dirname(variables.get(
                 'OUTPUT_DIR', '.')+'/'+variables['OUTPUT']), exist_ok=True)
-            
+
             # Link the files
             # linker (-o or nothing (for ar)) OUTPUT_DIR/OUTPUT (-shared or rcs) objs
             print(" ".join([variables[what.upper()+'_COMPILER'], ('-shared' if what.upper() == 'SHARED' else 'rcs'), ('-o' if what.upper() == 'SHARED' else ''),
                             variables.get('OUTPUT_DIR', '.')+'/'+variables['OUTPUT'], ' '.join(objs)]))
             os.system(" ".join([variables[what.upper()+'_COMPILER'], ('-shared' if what.upper() == 'SHARED' else 'rcs'), ('-o' if what.upper() == 'SHARED' else ''),
                       variables.get('OUTPUT_DIR', '.')+'/'+variables['OUTPUT'], ' '.join(objs)]))
-            
+
         # Exit the program
         elif lines[i].startswith('exit'):
-            # TODO: Make this a function not a statement
             # Check for an exit code
-            arguments = [x.strip() for x in lines[i].split(" ") if x]
+            code = re.search("exit[ ]*\((.*?)\)", lines[i]).groups()[0].strip()
             # Exit with 0 or the exit code
-            sys.exit(int(arguments[1]) if len(arguments) > 1 else 0)
+            sys.exit(code or 0)
+        elif lines[i].startswith('exec'):
+            os.system(os.__file__ + ' -m akbs --file ' +
+                      re.search(r"exec[ ]*\((.+?)\)", lines[i]).groups()[0].strip())
+
         i += 1
     # Remove the cache files if we are cleaning
     if args.clean:
         os.remove('.hashes')
         os.remove('.comp_caches')
         sys.exit(0)
-    # Save the cache files 
+    # Save the cache files
     if not args.no_cache:
         with open('.hashes', 'w') as f:
             json.dump(hash_table, f)
