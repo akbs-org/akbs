@@ -112,8 +112,13 @@ Comments work by adding a semi-colon at the start of the line
 ; will    
 ; be      
 ; skipped 
+
 ```
-**Comments only work from the start of the line**
+
+Comments will also work at the end of a line
+```
+print($PLATFORM) ; this text will be ignored, and is merely a comment
+```
 
 There is also a list of helper functions
 

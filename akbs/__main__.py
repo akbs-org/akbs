@@ -212,9 +212,12 @@ if __name__ == '__main__':
         # Preprocess the file and evaluate variables and helper functions
         lines[i] = clrfuncs(clrvars(clrdefines(lines[i]))).strip()
         # Skip empty lines and comments
-        if not lines[i] or lines[i].startswith(";"):
+        if not lines[i] or lines[i].strip().startswith(";"):
             i += 1
             continue
+        # Otherwise, if the entire line is not a comment, only remove the part of it that is one.
+        if ';' in lines[i]:
+            lines[i] = lines[i].split(";")[0].strip()
         # Preprocesser define
         if lines[i].startswith("%define"):
             # Split by a space a maximum of 2 times
