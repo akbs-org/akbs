@@ -315,7 +315,7 @@ if __name__ == '__main__':
                     # Compile the file
                     # compiler -o BUILD_DIR/file.o (-c or -felf64) file -std=language_STD (language_FLAGS)
                     cmd = variables[language+'_COMPILER'] + ' -o '+variables.get("BUILD_DIR", ".")+"/"+(".".join(file.split('.')[:-1]))+'.o ' + ('-felf64 ' if file.split('.')[-1] in ['asm', 'S'] else '-c ') + file + (
-                        (' -std='+{'c': 'c', 'cpp': 'c++'}[file.split('.')[-1]]+variables[str({'c': 'C', 'cpp': 'CXX'}.get(file.split('.')[-1], None))+'_STD']) if str({'c': 'C', 'cpp': 'CXX'}.get(file.split('.')[-1], None))+'_STD' in variables else '' + (variables.get(language+'_FLAGS', '')))
+                        (' -std='+{'c': 'c', 'cpp': 'c++'}[file.split('.')[-1]]+variables[str({'c': 'C', 'cpp': 'CXX'}.get(file.split('.')[-1], None))+'_STD']) if str({'c': 'C', 'cpp': 'CXX'}.get(file.split('.')[-1], None))+'_STD' in variables else '') + (variables.get(language+'_FLAGS', ''))
                     print(cmd)
                     return os.system(cmd)
                 return_code = exec()
